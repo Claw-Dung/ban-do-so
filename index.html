@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bản đồ số – Hệ thống điểm bán hàng</title>
+
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --bg:#0d1117;--surface:#161b22;--surface2:#1c2230;--border:#21262d;
+  --accent:#00c2a8;--accent2:#ff6b35;--gold:#f0b429;
+  --text:#e6edf3;--muted:#7d8590;--danger:#f85149;--info:#58a6ff;
+  --green:#3fb950;--font:'Segoe UI',system-ui,sans-serif;
+}
+
+body{font-family:var(--font);background:var(--bg);color:var(--text);
+  height:100vh;display:flex;flex-direction:column;overflow:hidden}
+
+/* ── HEADER ── */
+.header{display:flex;align-items:center;justify-content:space-between;
+  padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--border);
+  flex-shrink:0;gap:12px;flex-wrap:wrap}
+.header-left{display:flex;align-items:center;gap:12px}
+.logo{width:30px;height:30px;border-radius:8px;
+  background:linear-gradient(135deg,var(--accent),#0097a0);
+  display:flex;align-items:center;justify-content:center;font-size:15px}
+.title h1{font-size:13px;font-weight:700}
+.title p{font-size:10px;color:var(--muted);margin-top:1px}
+
+.stats{display:flex;gap:16px}
+.stat{text-align:center}
+.stat-val{font-size:16px;font-weight:700;font-family:monospace;color:var(--accent);line-height:1}
+.stat-val.o{color:var(--accent2)}.stat-val.g{color:var(--gold)}.stat-val.r{color:var(--danger)}
+.stat-label{font-size:9px;color:var(--muted);margin-top:1px;text-transform:uppercase;letter-spacing:.5px}
+
+.header-right{display:flex;gap:8px}
+.btn{padding:6px 12px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;
+  border:1px solid var(--border);background:var(--surface2);color:var(--text);
+  font-family:var(--font);transition:all .15s}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.primary{background:var(--accent);color:#000;border-color:var(--accent)}
+.btn.primary:hover{background:#00dfc0}
+
+/* ── LOADING OVERLAY ── */
+#loading{position:fixed;inset:0;background:var(--bg);display:flex;
+  flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:16px}
+.spinner{width:40px;height:40px;border:3px solid var(--border);
+  border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#loading p{color:var(--muted);font-size:13px}
+#loading.hidden{display:none}
+
+/* ── LAYOUT ── */
+.layout{display:flex;flex:1;overflow:hidden}
+
+/* ── SIDEBAR ── */
+.sidebar{width:290px;background:var(--surface);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;flex-shrink:0}
+
+.search-wrap{padding:10px;border-bottom:1px solid var(--border)}
+.search-input{width:100%;padding:7px 11px;background:var(--bg);border:1px solid var(--border);
+  border-radius:7px;color:var(--text);font-size:12px;font-family:var(--font);outline:none;transition:border-color .15s}
+.search-input:focus{border-color:var(--accent)}
+.search-input::placeholder{color:var(--muted)}
+
+.filter-row{display:flex;gap:5px;padding:7px 10px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.chip{padding:3px 9px;border-radius:20px;font-size:10px;font-weight:600;cursor:pointer;
+  border:1px solid var(--border);background:transparent;color:var(--muted);
+  transition:all .15s;font-family:var(--font)}
+.chip.on-all{border-color:var(--accent);color:var(--accent);background:rgba(0,194,168,.08)}
+.chip.on-signed{border-color:var(--green);color:var(--green);background:rgba(63,185,80,.08)}
+.chip.on-unsigned{border-color:var(--danger);color:var(--danger);background:rgba(248,81,73,.08)}
+.chip.on-expiring{border-color:var(--gold);color:var(--gold);background:rgba(240,180,41,.08)}
+
+.loc-list{flex:1;overflow-y:auto}
+.loc-list::-webkit-scrollbar{width:3px}
+.loc-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+.loc-item{display:flex;align-items:flex-start;gap:9px;padding:10px;
+  border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
+.loc-item:hover{background:var(--surface2)}
+.loc-item.active{background:var(--surface2);border-left:3px solid var(--accent)}
+
+.loc-icon{width:30px;height:30px;border-radius:7px;display:flex;
+  align-items:center;justify-content:center;font-size:14px;flex-shrink:0;margin-top:1px}
+.loc-icon.sac{background:rgba(88,166,255,.12)}
+.loc-icon.bhx{background:rgba(63,185,80,.12)}
+.loc-icon.wm{background:rgba(240,180,41,.12)}
+.loc-icon.def{background:rgba(125,133,144,.12)}
+
+.loc-info{flex:1;min-width:0}
+.loc-name{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.loc-sys{font-size:10px;color:var(--muted);margin-top:1px}
+.loc-person{font-size:10px;color:var(--accent);margin-top:3px}
+
+.badge{font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;
+  font-family:monospace;white-space:nowrap}
+.badge.signed{background:rgba(63,185,80,.12);color:var(--green)}
+.badge.unsigned{background:rgba(248,81,73,.12);color:var(--danger)}
+.badge.negot{background:rgba(240,180,41,.12);color:var(--gold)}
+.badge.expired{background:rgba(248,81,73,.2);color:var(--danger)}
+.badge.active{background:rgba(63,185,80,.12);color:var(--green)}
+.badge.inactive{background:rgba(125,133,144,.12);color:var(--muted)}
+
+/* ── MAP ── */
+.map-area{flex:1;display:flex;flex-direction:column;position:relative}
+#map{flex:1;background:var(--bg)}
+
+/* Leaflet dark override */
+.leaflet-tile{filter:brightness(.85) contrast(.95) saturate(.8)}
+.leaflet-container{background:#0d1117}
+.leaflet-control-zoom a{background:var(--surface)!important;color:var(--text)!important;
+  border-color:var(--border)!important}
+
+/* Custom popup */
+.leaflet-popup-content-wrapper{background:var(--surface);border:1px solid var(--border);
+  border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,.6);color:var(--text)}
+.leaflet-popup-tip{background:var(--surface)}
+.leaflet-popup-content{margin:14px 16px;min-width:220px}
+.popup-sys{font-size:10px;color:var(--muted);margin-bottom:4px}
+.popup-name{font-size:14px;font-weight:700;margin-bottom:8px;line-height:1.3}
+.popup-row{display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px}
+.popup-key{color:var(--muted)}
+.popup-val{font-weight:500;text-align:right}
+.popup-actions{display:flex;gap:6px;margin-top:10px}
+.popup-btn{flex:1;padding:5px;border-radius:5px;font-size:11px;font-weight:600;
+  cursor:pointer;border:1px solid var(--border);background:var(--surface2);
+  color:var(--text);text-align:center;font-family:var(--font)}
+.popup-btn:hover{border-color:var(--accent);color:var(--accent)}
+.popup-btn.p{background:var(--accent);color:#000;border-color:var(--accent)}
+
+/* ── DETAIL PANEL ── */
+.panel{position:absolute;right:12px;top:12px;bottom:12px;width:272px;
+  background:var(--surface);border:1px solid var(--border);border-radius:11px;
+  display:flex;flex-direction:column;transform:translateX(300px);
+  transition:transform .25s ease;z-index:1000;overflow:hidden}
+.panel.open{transform:translateX(0)}
+.panel-hdr{padding:14px;border-bottom:1px solid var(--border);
+  display:flex;justify-content:space-between;align-items:center}
+.panel-close{width:22px;height:22px;border-radius:5px;background:var(--surface2);
+  border:1px solid var(--border);color:var(--muted);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;font-size:13px}
+.panel-close:hover{color:var(--text)}
+.panel-name{padding:10px 14px 4px;font-size:15px;font-weight:700;line-height:1.3}
+.panel-addr{padding:0 14px 12px;font-size:11px;color:var(--muted);
+  border-bottom:1px solid var(--border)}
+.panel-body{flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:12px}
+.panel-body::-webkit-scrollbar{width:3px}
+.panel-body::-webkit-scrollbar-thumb{background:var(--border)}
+.section-title{font-size:9px;font-weight:700;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.8px;margin-bottom:7px}
+.person-card{background:var(--surface2);border:1px solid var(--border);
+  border-radius:7px;padding:9px 11px}
+.person-name{font-size:12px;font-weight:600}
+.person-role{font-size:10px;color:var(--muted);margin-top:1px}
+.person-phone{font-size:11px;color:var(--accent);margin-top:5px;font-family:monospace}
+.info-row{display:flex;justify-content:space-between;align-items:center;padding:3px 0}
+.info-key{font-size:11px;color:var(--muted)}
+.info-val{font-size:11px;font-weight:500;text-align:right;max-width:160px}
+.note-text{font-size:11px;color:var(--muted);line-height:1.6}
+.panel-footer{padding:12px 14px;border-top:1px solid var(--border);display:flex;gap:7px}
+.panel-footer .btn{flex:1;text-align:center}
+
+/* Expiry warning */
+.expiry-warn{background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.3);
+  border-radius:7px;padding:8px 10px;font-size:11px;color:var(--danger)}
+.expiry-ok{background:rgba(63,185,80,.06);border:1px solid rgba(63,185,80,.2);
+  border-radius:7px;padding:8px 10px;font-size:11px;color:var(--green)}
+
+/* error state */
+.error-bar{background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.3);
+  padding:8px 16px;font-size:12px;color:var(--danger);flex-shrink:0;display:none}
+.error-bar.show{display:block}
+
+/* edit coords mode */
+.edit-coords-bar{
+  position:absolute;top:0;left:0;right:0;z-index:2000;
+  background:linear-gradient(135deg,#f0b429,#e6a020);
+  color:#000;font-size:12px;font-weight:600;
+  padding:8px 16px;display:flex;align-items:center;gap:12px;
+  box-shadow:0 2px 8px rgba(0,0,0,.4);display:none;
+}
+.edit-coords-bar.active{display:flex}
+.edit-coords-bar .cancel-btn{
+  margin-left:auto;padding:4px 12px;border-radius:5px;
+  background:rgba(0,0,0,.15);border:none;color:#000;
+  font-weight:700;cursor:pointer;font-size:11px;
+}
+#map.edit-mode{cursor:crosshair!important}
+
+/* coords toast */
+.coords-toast{
+  position:absolute;bottom:60px;left:50%;transform:translateX(-50%);
+  background:var(--surface);border:1px solid var(--accent);border-radius:8px;
+  padding:8px 16px;font-size:12px;color:var(--accent);
+  z-index:1500;display:none;white-space:nowrap;
+  box-shadow:0 2px 12px rgba(0,0,0,.5);
+}
+.coords-toast.show{display:block}
+
+/* legend */
+.legend{position:absolute;bottom:12px;left:12px;background:var(--surface);
+  border:1px solid var(--border);border-radius:7px;padding:9px 12px;
+  display:flex;flex-direction:column;gap:5px;z-index:500;pointer-events:none}
+.legend-title{font-size:9px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+.legend-item{display:flex;align-items:center;gap:7px;font-size:10px;color:var(--muted)}
+.ldot{width:9px;height:9px;border-radius:50%}
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loading">
+  <div class="spinner"></div>
+  <p>Đang tải dữ liệu từ Google Sheets…</p>
+</div>
+
+<!-- ERROR BAR -->
+<div class="error-bar" id="error-bar"></div>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-left">
+    <div class="logo">🗺</div>
+    <div class="title">
+      <h1>BẢN ĐỒ SỐ – HỆ THỐNG ĐIỂM BÁN HÀNG</h1>
+      <p id="subtitle">Đang kết nối…</p>
+    </div>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="stat-val" id="s-total">–</div><div class="stat-label">Tổng điểm</div></div>
+    <div class="stat"><div class="stat-val" id="s-active">–</div><div class="stat-label">Hoạt động</div></div>
+    <div class="stat"><div class="stat-val o" id="s-signed">–</div><div class="stat-label">Đã ký HĐ</div></div>
+    <div class="stat"><div class="stat-val r" id="s-expiring">–</div><div class="stat-label">Sắp hết hạn</div></div>
+  </div>
+  <div class="header-right">
+    <button class="btn" onclick="exportCSV()">⬇ Xuất CSV</button>
+    <button class="btn" onclick="refreshData()">↻ Làm mới</button>
+  </div>
+</div>
+
+<!-- LAYOUT -->
+<div class="layout">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="search-wrap">
+      <input class="search-input" id="search" placeholder="🔍  Tìm cơ sở, hệ thống, người phụ trách…" oninput="applyFilters()">
+    </div>
+    <div class="filter-row">
+      <button class="chip on-all" id="chip-all"      onclick="setFilter('all')">Tất cả</button>
+      <button class="chip"        id="chip-signed"   onclick="setFilter('signed')">✅ Đã ký</button>
+      <button class="chip"        id="chip-unsigned" onclick="setFilter('unsigned')">⚠ Chưa ký</button>
+      <button class="chip"        id="chip-expiring" onclick="setFilter('expiring')">🕐 Sắp hết hạn</button>
+    </div>
+    <div class="loc-list" id="loc-list"></div>
+  </div>
+
+  <!-- MAP -->
+  <div class="map-area">
+    <!-- Edit coords bar -->
+    <div class="edit-coords-bar" id="edit-coords-bar">
+      📍 Chế độ SỬA VỊ TRÍ — Click vào bản đồ để đặt tọa độ mới
+      <span id="edit-coords-hint" style="font-weight:400;opacity:.8"></span>
+      <button class="cancel-btn" onclick="cancelEditCoords()">✕ Huỷ</button>
+    </div>
+    <!-- Coords saved toast -->
+    <div class="coords-toast" id="coords-toast">✓ Đã lưu tọa độ mới</div>
+    <div id="map"></div>
+
+    <!-- LEGEND -->
+    <div class="legend">
+      <div class="legend-title">Chú giải</div>
+      <div class="legend-item"><div class="ldot" style="background:#3fb950"></div>Đã ký hợp đồng</div>
+      <div class="legend-item"><div class="ldot" style="background:#f85149"></div>Chưa ký / Hết hạn</div>
+      <div class="legend-item"><div class="ldot" style="background:#f0b429"></div>Đang đàm phán / Sắp hết hạn</div>
+      <div class="legend-item"><div class="ldot" style="background:#7d8590"></div>Tạm ngừng</div>
+    </div>
+
+    <!-- DETAIL PANEL -->
+    <div class="panel" id="panel">
+      <div class="panel-hdr">
+        <div class="badge" id="p-badge"></div>
+        <button class="panel-close" onclick="closePanel()">✕</button>
+      </div>
+      <div class="panel-name" id="p-name"></div>
+      <div class="panel-addr" id="p-addr"></div>
+      <div class="panel-body">
+        <div>
+          <div class="section-title">Người phụ trách – cửa hàng</div>
+          <div class="person-card" id="p-store-person"></div>
+        </div>
+        <div>
+          <div class="section-title">Sales phụ trách – nội bộ</div>
+          <div class="person-card" id="p-sales-person"></div>
+        </div>
+        <div>
+          <div class="section-title">Thông tin điểm</div>
+          <div id="p-info"></div>
+        </div>
+        <div>
+          <div class="section-title">Pháp lý hợp đồng</div>
+          <div id="p-legal"></div>
+        </div>
+        <div id="p-expiry-block"></div>
+        <div id="p-notes-block"></div>
+      </div>
+      <div class="panel-footer">
+        <button class="btn" onclick="openMaps()">📍 Chỉ đường</button>
+        <button class="btn p" onclick="callStore()">📞 Gọi cửa hàng</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Leaflet JS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+
+<script>
+// ============================================================
+// CẤU HÌNH — THAY GIÁ TRỊ NÀY SAU KHI DEPLOY APPS SCRIPT
+// ============================================================
+const API_URL = 'https://script.google.com/macros/s/AKfycbyuV1ZcFokZYKY0_SPjphzYNhMN7eR3eSyhQTESo79rCWJ2jNTEbZqzSEsaB75C2bU/exec';
+
+// Chế độ demo: dùng khi chưa có API thật
+const DEMO_MODE = API_URL.includes('THAY_BANG');
+
+// ============================================================
+// STATE
+// ============================================================
+let allLocations = [];
+let filteredLocations = [];
+let activeFilter = 'all';
+let selectedId = null;
+let map, markersLayer;
+let currentLocation = null;
+
+// ============================================================
+// MARKER COLORS theo trạng thái hợp đồng
+// ============================================================
+function markerColor(loc) {
+  if (loc.status === 'Tạm ngừng' || loc.status === 'Đóng cửa') return '#7d8590';
+  const cs = loc.contract_status || '';
+  if (cs === 'Đã ký') {
+    // Kiểm tra sắp hết hạn (30 ngày)
+    if (loc.contract_expiry) {
+      const diff = (new Date(loc.contract_expiry) - new Date()) / 86400000;
+      if (diff < 30) return '#f0b429';
+    }
+    return '#3fb950';
+  }
+  if (cs === 'Đang đàm phán') return '#f0b429';
+  if (cs === 'Hết hạn') return '#f85149';
+  return '#f85149'; // Chưa ký
+}
+
+function markerSVG(color, selected) {
+  const s = selected ? 1.3 : 1;
+  return `<svg width="${30*s}" height="${36*s}" viewBox="0 0 30 36" xmlns="http://www.w3.org/2000/svg">
+    <path d="M15 1C8.4 1 3 6.4 3 13c0 8.5 12 23 12 23s12-14.5 12-23C27 6.4 21.6 1 15 1z"
+      fill="${color}" opacity="${selected?1:.85}" stroke="${selected?'#fff':color}" stroke-width="${selected?2:1}"/>
+    <circle cx="15" cy="13" r="5" fill="white" opacity=".9"/>
+  </svg>`;
+}
+
+function makeIcon(loc, selected=false) {
+  const color = markerColor(loc);
+  return L.divIcon({
+    html: markerSVG(color, selected),
+    iconSize: selected ? [39,47] : [30,36],
+    iconAnchor: selected ? [19.5,47] : [15,36],
+    popupAnchor: [0, -38],
+    className: ''
+  });
+}
+
+// ============================================================
+// INIT MAP
+// ============================================================
+function initMap() {
+  map = L.map('map', { center: [10.78, 106.70], zoom: 12 });
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a>',
+    maxZoom: 19
+  }).addTo(map);
+
+  markersLayer = L.layerGroup().addTo(map);
+
+  // Click handler: chế độ sửa tọa độ
+  map.on('click', function(e) {
+    if (!editCoordsMode || !currentLocation) return;
+    const { lat, lng } = e.latlng;
+    saveCoords(currentLocation.loc_id, lat, lng);
+  });
+}
+
+// ============================================================
+// LOAD DATA
+// ============================================================
+async function loadData() {
+  document.getElementById('loading').classList.remove('hidden');
+
+  if (DEMO_MODE) {
+    // Dữ liệu demo khi chưa kết nối API
+    allLocations = getDemoData();
+    document.getElementById('subtitle').textContent =
+      'DEMO MODE – thay API_URL để kết nối Google Sheets thực';
+  } else {
+    try {
+      const res  = await fetch(API_URL + '?action=getAll');
+      const json = await res.json();
+      if (json.status !== 'ok') throw new Error(json.message);
+      allLocations = json.data;
+      document.getElementById('subtitle').textContent =
+        `TP.HCM · Cập nhật: ${new Date().toLocaleString('vi-VN')}`;
+    } catch(err) {
+      showError('Không thể tải dữ liệu: ' + err.message);
+      allLocations = getDemoData();
+    }
+  }
+
+  updateStats();
+  applyFilters();
+  document.getElementById('loading').classList.add('hidden');
+}
+
+async function refreshData() {
+  selectedId = null;
+  closePanel();
+  await loadData();
+}
+
+// ============================================================
+// STATS
+// ============================================================
+function updateStats() {
+  const today = new Date();
+  const expiring = allLocations.filter(l => {
+    if (!l.contract_expiry) return false;
+    const d = (new Date(l.contract_expiry) - today) / 86400000;
+    return d >= 0 && d <= 30;
+  }).length;
+
+  document.getElementById('s-total').textContent   = allLocations.length;
+  document.getElementById('s-active').textContent  = allLocations.filter(l=>l.status==='Hoạt động').length;
+  document.getElementById('s-signed').textContent  = allLocations.filter(l=>l.contract_status==='Đã ký').length;
+  document.getElementById('s-expiring').textContent = expiring;
+}
+
+// ============================================================
+// FILTER + RENDER
+// ============================================================
+function setFilter(f) {
+  activeFilter = f;
+  ['all','signed','unsigned','expiring'].forEach(k => {
+    const el = document.getElementById('chip-'+k);
+    el.className = 'chip' + (k===f ? ' on-'+k : '');
+  });
+  applyFilters();
+}
+
+function applyFilters() {
+  const q = document.getElementById('search').value.toLowerCase();
+  const today = new Date();
+
+  filteredLocations = allLocations.filter(l => {
+    // Filter
+    let ok = true;
+    if (activeFilter === 'signed')   ok = l.contract_status === 'Đã ký';
+    if (activeFilter === 'unsigned') ok = l.contract_status !== 'Đã ký';
+    if (activeFilter === 'expiring') {
+      if (!l.contract_expiry) return false;
+      const d = (new Date(l.contract_expiry) - today) / 86400000;
+      ok = d >= 0 && d <= 30;
+    }
+    // Search
+    if (q) {
+      const hay = [l.loc_name, l.sys_name_ref, l.sys_type, l.sales_owner,
+                   l.store_manager, l.address].filter(Boolean).join(' ').toLowerCase();
+      ok = ok && hay.includes(q);
+    }
+    return ok;
+  });
+
+  renderList();
+  renderMarkers();
+}
+
+// ============================================================
+// RENDER LIST
+// ============================================================
+function renderList() {
+  const el = document.getElementById('loc-list');
+  if (!filteredLocations.length) {
+    el.innerHTML = '<div class="empty">Không tìm thấy cơ sở nào</div>';
+    return;
+  }
+
+  el.innerHTML = filteredLocations.map(l => {
+    const cs = l.contract_status || 'Chưa ký';
+    const badgeClass = cs==='Đã ký'?'signed':cs==='Đang đàm phán'?'negot':cs==='Hết hạn'?'expired':'unsigned';
+    const isActive = selectedId === l.loc_id;
+    const icon = sysIcon(l.sys_name_ref || '');
+    return `<div class="loc-item${isActive?' active':''}" onclick="selectLoc('${l.loc_id}')">
+      <div class="loc-icon ${icon.cls}">${icon.em}</div>
+      <div class="loc-info">
+        <div class="loc-name">${l.loc_name || '–'}</div>
+        <div class="loc-sys">${l.sys_name_ref || ''}</div>
+        <div class="loc-person">👤 ${l.sales_owner || 'Chưa phân công'}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:3px;align-items:flex-end">
+        <span class="badge ${badgeClass}">${cs}</span>
+        <span class="badge ${l.status==='Hoạt động'?'active':'inactive'}">${l.status||'?'}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function sysIcon(sysName) {
+  const n = (sysName||'').toLowerCase();
+  if (n.includes('bách hoá') || n.includes('bhx')) return {cls:'bhx', em:'🟢'};
+  if (n.includes('winmart') || n.includes('win'))  return {cls:'wm',  em:'🔵'};
+  if (n.includes('gs25'))                           return {cls:'sac', em:'⭐'};
+  return {cls:'def', em:'🏪'};
+}
+
+// ============================================================
+// RENDER MARKERS
+// ============================================================
+function renderMarkers() {
+  markersLayer.clearLayers();
+
+  filteredLocations.forEach(l => {
+    if (!l.lat || !l.lng || l.lat === 'GEOCODE_FAIL') return;
+    const lat = parseFloat(l.lat), lng = parseFloat(l.lng);
+    if (isNaN(lat) || isNaN(lng)) return;
+
+    const selected = selectedId === l.loc_id;
+    const marker = L.marker([lat, lng], { icon: makeIcon(l, selected) });
+
+    marker.bindPopup(buildPopup(l), { maxWidth: 260, className: '' });
+    marker.on('click', () => selectLoc(l.loc_id));
+    markersLayer.addLayer(marker);
+  });
+}
+
+function buildPopup(l) {
+  const cs = l.contract_status || 'Chưa ký';
+  const color = cs==='Đã ký'?'var(--green)':cs==='Đang đàm phán'?'var(--gold)':'var(--danger)';
+  return `<div>
+    <div class="popup-sys">${[l.sys_name_ref, l.sys_type].filter(Boolean).join(' · ')}</div>
+    <div class="popup-name">${l.loc_name||'–'}</div>
+    <div class="popup-row"><span class="popup-key">Sales PT</span><span class="popup-val">${l.sales_owner||'–'}</span></div>
+    <div class="popup-row"><span class="popup-key">Hợp đồng</span>
+      <span class="popup-val" style="color:${color}">${cs}</span></div>
+    <div class="popup-actions">
+      <div class="popup-btn" onclick="openMapsFor('${(l.address||'').replace(/'/g,"\\'")}')">📍 Chỉ đường</div>
+      <div class="popup-btn p" onclick="selectLoc('${l.loc_id}')">Chi tiết →</div>
+    </div>
+  </div>`;
+}
+
+// ============================================================
+// SELECT LOCATION
+// ============================================================
+function selectLoc(id) {
+  selectedId = id;
+  currentLocation = allLocations.find(l => l.loc_id === id);
+  if (!currentLocation) return;
+  const l = currentLocation;
+
+  // Update list highlight
+  renderList();
+  renderMarkers();
+
+  // Pan map to marker
+  if (l.lat && l.lng && l.lat !== 'GEOCODE_FAIL') {
+    map.panTo([parseFloat(l.lat), parseFloat(l.lng)], {animate:true});
+  }
+
+  // Fill panel — tiêu đề: Tên hệ thống + Loại hệ thống
+  const sysLabel = [l.sys_name_ref, l.sys_type].filter(Boolean).join(' · ');
+  document.getElementById('p-badge').className = 'badge signed';
+  document.getElementById('p-badge').textContent = sysLabel || '–';
+  document.getElementById('p-name').textContent = l.loc_name || '–';
+  document.getElementById('p-addr').textContent = '📍 ' + (l.address || 'Chưa có địa chỉ');
+
+  // Store manager
+  document.getElementById('p-store-person').innerHTML = `
+    <div class="person-name">${l.store_manager||'Chưa cập nhật'}</div>
+    <div class="person-role">Quản lý cơ sở</div>
+    ${l.store_phone?`<div class="person-phone">${l.store_phone}</div>`:''}
+  `;
+
+  // Sales owner
+  document.getElementById('p-sales-person').innerHTML = `
+    <div class="person-name">${l.sales_owner||'Chưa phân công'}</div>
+    <div class="person-role">Sales phụ trách</div>
+    ${l.sales_phone?`<div class="person-phone">${l.sales_phone}</div>`:''}
+  `;
+
+  // Info — bố cục: người phụ trách → thông tin điểm → pháp lý → ghi chú
+  const cs = l.contract_status || 'Chưa ký';
+  document.getElementById('p-info').innerHTML = `
+    <div class="info-row"><span class="info-key">Hệ thống</span><span class="info-val">${l.sys_name_ref||'–'}</span></div>
+    <div class="info-row"><span class="info-key">Loại</span><span class="info-val">${l.sys_type||'–'}</span></div>
+    <div class="info-row"><span class="info-key">Trạng thái</span><span class="info-val">${l.status||'–'}</span></div>
+    <div class="info-row"><span class="info-key">Tọa độ</span>
+      <span class="info-val" style="font-family:monospace;font-size:10px">
+        ${l.lat&&l.lng ? parseFloat(l.lat).toFixed(4)+', '+parseFloat(l.lng).toFixed(4) : '⚠ Chưa có'}
+        <button onclick="startEditCoords()" style="margin-left:6px;font-size:10px;padding:1px 6px;border-radius:4px;border:1px solid var(--border);background:var(--surface2);color:var(--accent);cursor:pointer;">✏️</button>
+      </span>
+    </div>
+  `;
+
+  // Legal
+  const signed = l.contract_signed ? new Date(l.contract_signed).toLocaleDateString('vi-VN') : '–';
+  const expiry = l.contract_expiry ? new Date(l.contract_expiry).toLocaleDateString('vi-VN') : '–';
+  document.getElementById('p-legal').innerHTML = `
+    <div class="info-row"><span class="info-key">Trạng thái</span><span class="info-val">${cs}</span></div>
+    <div class="info-row"><span class="info-key">Ngày ký</span><span class="info-val">${signed}</span></div>
+    <div class="info-row"><span class="info-key">Hết hạn</span><span class="info-val">${expiry}</span></div>
+  `;
+
+  // Expiry warning
+  const exBlock = document.getElementById('p-expiry-block');
+  if (l.contract_expiry) {
+    const diff = Math.round((new Date(l.contract_expiry) - new Date()) / 86400000);
+    if (diff < 0) {
+      exBlock.innerHTML = `<div class="expiry-warn">⚠ Hợp đồng đã hết hạn ${Math.abs(diff)} ngày trước</div>`;
+    } else if (diff <= 30) {
+      exBlock.innerHTML = `<div class="expiry-warn">⚠ Còn <b>${diff} ngày</b> đến hết hạn – cần gia hạn sớm</div>`;
+    } else {
+      exBlock.innerHTML = `<div class="expiry-ok">✓ Hợp đồng còn hiệu lực ${diff} ngày</div>`;
+    }
+  } else {
+    exBlock.innerHTML = '';
+  }
+
+  // Notes
+  const nBlock = document.getElementById('p-notes-block');
+  if (l.notes) {
+    nBlock.innerHTML = `<div class="section-title">Ghi chú</div><div class="note-text">${l.notes}</div>`;
+  } else {
+    nBlock.innerHTML = '';
+  }
+
+  document.getElementById('panel').classList.add('open');
+}
+
+function closePanel() {
+  selectedId = null;
+  document.getElementById('panel').classList.remove('open');
+  cancelEditCoords();
+  renderList();
+  renderMarkers();
+}
+
+// ============================================================
+// SỬA TỌA ĐỘ THỦ CÔNG TRÊN BẢN ĐỒ
+// ============================================================
+let editCoordsMode = false;
+
+function startEditCoords() {
+  if (!currentLocation) return;
+  editCoordsMode = true;
+  document.getElementById('edit-coords-bar').classList.add('active');
+  document.getElementById('edit-coords-hint').textContent =
+    ' — ' + (currentLocation.loc_name || currentLocation.loc_id);
+  document.getElementById('map').classList.add('edit-mode');
+  // Đóng panel để thấy bản đồ rõ hơn trên mobile
+  document.getElementById('panel').classList.remove('open');
+}
+
+function cancelEditCoords() {
+  editCoordsMode = false;
+  document.getElementById('edit-coords-bar').classList.remove('active');
+  document.getElementById('map').classList.remove('edit-mode');
+}
+
+function showCoordsToast(msg) {
+  const el = document.getElementById('coords-toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+async function saveCoords(locId, lat, lng) {
+  // Cập nhật local state ngay lập tức (optimistic update)
+  const loc = allLocations.find(l => l.loc_id === locId);
+  if (loc) { loc.lat = lat; loc.lng = lng; }
+
+  // Hiển thị toast
+  showCoordsToast(`✓ Đã cập nhật: ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+  renderMarkers();
+
+  // Nếu có API_URL thực → ghi ngược về Sheets qua POST
+  if (!DEMO_MODE) {
+    try {
+      await fetch(API_URL, {
+        method: 'POST',
+        body: JSON.stringify({
+          op: 'update',
+          loc_id: locId,
+          data: { lat, lng }
+        })
+      });
+    } catch(err) {
+      showError('Đã cập nhật trên bản đồ nhưng chưa lưu vào Sheets: ' + err.message);
+    }
+  } else {
+    // Demo mode: nhắc nhở nhập thủ công vào Sheets
+    showCoordsToast(`✓ ${lat.toFixed(6)}, ${lng.toFixed(6)} — Copy để dán vào Sheets`);
+  }
+
+  // Mở lại panel với tọa độ mới
+  cancelEditCoords();
+  if (loc) selectLoc(locId);
+}
+
+// ============================================================
+// ACTIONS
+// ============================================================
+function openMaps() {
+  if (!currentLocation) return;
+  openMapsFor(currentLocation.address || currentLocation.loc_name);
+}
+function openMapsFor(addr) {
+  window.open('https://maps.google.com/?q=' + encodeURIComponent(addr), '_blank');
+}
+function callStore() {
+  if (!currentLocation || !currentLocation.store_phone) return;
+  window.open('tel:' + currentLocation.store_phone.replace(/\s/g,''));
+}
+
+function exportCSV() {
+  const cols = ['loc_id','sys_name_ref','sys_type','loc_name','address',
+                'store_manager','store_phone','sales_owner','sales_phone',
+                'contract_status','contract_signed','contract_expiry',
+                'status','notes'];
+  const hdr  = ['ID','Hệ thống','Loại HT','Tên cơ sở','Địa chỉ',
+                 'Quản lý CH','SĐT quản lý','Sales PT','SĐT sales',
+                 'TT hợp đồng','Ngày ký','Ngày hết hạn',
+                 'Trạng thái','Ghi chú'];
+  const rows = allLocations.map(l => cols.map(c => `"${(l[c]||'').toString().replace(/"/g,'""')}"`));
+  const csv  = [hdr.map(h=>`"${h}"`), ...rows].map(r=>r.join(',')).join('\n');
+  const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'});
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(blob);
+  a.download = `ban-do-diem-ban-hang-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+function showError(msg) {
+  const el = document.getElementById('error-bar');
+  el.textContent = '⚠ ' + msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 6000);
+}
+
+// ============================================================
+// DEMO DATA — dùng khi chưa có API
+// ============================================================
+function getDemoData() {
+  return [
+    {loc_id:'LOC-001',sys_id_ref:'SYS-001',sys_name_ref:'Bách Hoá Xanh',
+     sys_type:'Chuỗi cửa hàng',sys_scope:'TP.HCM / Toàn quốc',
+     loc_name:'BHX – Lê Văn Việt',
+     address:'123 Lê Văn Việt, P.Hiệp Phú, TP.Thủ Đức',lat:10.8231,lng:106.7689,
+     store_manager:'Trần Văn Hùng',store_phone:'0901 200 001',
+     sales_owner:'Nguyễn Sales A',sales_phone:'0911 300 001',
+     contract_status:'Đã ký',contract_signed:'2024-06-01',contract_expiry:'2025-08-01',
+     status:'Hoạt động',notes:'Ưu tiên kệ vị trí A1'},
+    {loc_id:'LOC-002',sys_id_ref:'SYS-001',sys_name_ref:'Bách Hoá Xanh',
+     sys_type:'Chuỗi cửa hàng',sys_scope:'TP.HCM / Toàn quốc',
+     loc_name:'BHX – Nguyễn Oanh',
+     address:'45 Nguyễn Oanh, P.17, Gò Vấp',lat:10.8355,lng:106.6836,
+     store_manager:'Lê Thị Mai',store_phone:'0901 200 002',
+     sales_owner:'Nguyễn Sales A',sales_phone:'0911 300 001',
+     contract_status:'Đã ký',contract_signed:'2024-09-15',contract_expiry:'2025-09-15',
+     status:'Hoạt động',notes:'Kho nhỏ, giao sáng sớm trước 7h'},
+    {loc_id:'LOC-003',sys_id_ref:'SYS-002',sys_name_ref:'WinMart+',
+     sys_type:'Siêu thị mini',sys_scope:'Toàn quốc',
+     loc_name:'WinMart+ – Phan Xích Long',
+     address:'88 Phan Xích Long, P.2, Phú Nhuận',lat:10.7990,lng:106.6842,
+     store_manager:'Phạm Đức Thành',store_phone:'0901 200 003',
+     sales_owner:'Trần Sales B',sales_phone:'0911 300 002',
+     contract_status:'Chưa ký',contract_signed:null,contract_expiry:null,
+     status:'Đang đàm phán',notes:'Đang chờ duyệt từ cấp vùng WinMart'},
+    {loc_id:'LOC-004',sys_id_ref:'SYS-003',sys_name_ref:'GS25',
+     sys_type:'Cửa hàng tiện lợi',sys_scope:'TP.HCM',
+     loc_name:'GS25 – Võ Văn Tần',
+     address:'22 Võ Văn Tần, P.6, Q.3',lat:10.7769,lng:106.6939,
+     store_manager:'Kim Soo Jin',store_phone:'0901 200 004',
+     sales_owner:'Võ Sales C',sales_phone:'0911 300 003',
+     contract_status:'Đã ký',contract_signed:'2025-01-10',contract_expiry:'2026-01-10',
+     status:'Hoạt động',notes:'Giao qua cửa hậu, liên hệ trước 1 ngày'},
+    {loc_id:'LOC-005',sys_id_ref:'SYS-002',sys_name_ref:'WinMart+',
+     sys_type:'Siêu thị mini',sys_scope:'Toàn quốc',
+     loc_name:'WinMart+ – Lũy Bán Bích',
+     address:'156 Lũy Bán Bích, P.Hòa Thạnh, Tân Phú',lat:10.7874,lng:106.6254,
+     store_manager:'Ngô Thị Hoa',store_phone:'0901 200 005',
+     sales_owner:'Trần Sales B',sales_phone:'0911 300 002',
+     contract_status:'Đã ký',contract_signed:'2025-03-01',contract_expiry:'2025-08-10',
+     status:'Hoạt động',notes:''},
+    {loc_id:'LOC-006',sys_id_ref:'SYS-001',sys_name_ref:'Bách Hoá Xanh',
+     sys_type:'Chuỗi cửa hàng',sys_scope:'TP.HCM / Toàn quốc',
+     loc_name:'BHX – Đinh Tiên Hoàng',
+     address:'105 Đinh Tiên Hoàng, P.3, Bình Thạnh',lat:10.8020,lng:106.7100,
+     store_manager:'Hoàng Văn Tú',store_phone:'0901 200 006',
+     sales_owner:'Nguyễn Sales A',sales_phone:'0911 300 001',
+     contract_status:'Hết hạn',contract_signed:'2023-07-01',contract_expiry:'2024-07-01',
+     status:'Tạm ngừng',notes:'HĐ hết hạn, chưa gia hạn. Cần xử lý gấp.'},
+  ];
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+initMap();
+loadData();
+</script>
+</body>
+</html>
