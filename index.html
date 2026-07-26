@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Bản đồ số – Hệ thống điểm bán hàng</title>
+<meta name="robots" content="noindex, nofollow">
+<title>Bản đồ số</title>
 
 <!-- Leaflet CSS -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
@@ -55,6 +56,28 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);
 #loading p{color:var(--muted);font-size:13px}
 #loading.hidden{display:none}
 
+/* ── PASSWORD GATE ── */
+#auth-gate{position:fixed;inset:0;background:var(--bg);display:flex;
+  align-items:center;justify-content:center;z-index:10000;padding:20px}
+#auth-gate.hidden{display:none}
+.auth-box{width:100%;max-width:320px;background:var(--surface);
+  border:1px solid var(--border);border-radius:14px;padding:28px 24px;text-align:center}
+.auth-logo{width:48px;height:48px;border-radius:12px;margin:0 auto 16px;
+  background:linear-gradient(135deg,var(--accent),#0097a0);
+  display:flex;align-items:center;justify-content:center;font-size:22px}
+.auth-title{font-size:15px;font-weight:700;margin-bottom:4px}
+.auth-sub{font-size:11px;color:var(--muted);margin-bottom:20px}
+.auth-input{width:100%;padding:10px 12px;background:var(--bg);
+  border:1px solid var(--border);border-radius:8px;color:var(--text);
+  font-size:14px;font-family:var(--font);outline:none;text-align:center;
+  letter-spacing:2px;transition:border-color .15s}
+.auth-input:focus{border-color:var(--accent)}
+.auth-btn{width:100%;margin-top:12px;padding:10px;border-radius:8px;
+  background:var(--accent);color:#000;border:none;font-weight:700;
+  font-size:13px;cursor:pointer;font-family:var(--font)}
+.auth-btn:hover{background:#00dfc0}
+.auth-error{color:var(--danger);font-size:11px;margin-top:10px;min-height:14px}
+
 /* ── LAYOUT ── */
 .layout{display:flex;flex:1;overflow:hidden}
 
@@ -68,7 +91,14 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);
 .search-input:focus{border-color:var(--accent)}
 .search-input::placeholder{color:var(--muted)}
 
-.filter-row{display:flex;gap:5px;padding:7px 10px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.filter-row{display:grid;grid-template-columns:1fr 1fr;gap:5px;padding:7px 10px;border-bottom:1px solid var(--border)}
+.filter-select{
+  min-width:0;padding:5px 6px;border-radius:6px;font-size:10px;font-weight:500;
+  border:1px solid var(--border);background:var(--bg);color:var(--text);
+  font-family:var(--font);cursor:pointer;outline:none;transition:border-color .15s;
+}
+.filter-select:focus{border-color:var(--accent)}
+.filter-select option{background:var(--surface);color:var(--text)}
 .chip{padding:3px 9px;border-radius:20px;font-size:10px;font-weight:600;cursor:pointer;
   border:1px solid var(--border);background:transparent;color:var(--muted);
   transition:all .15s;font-family:var(--font)}
@@ -155,7 +185,13 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);
 .section-title{font-size:9px;font-weight:700;color:var(--muted);
   text-transform:uppercase;letter-spacing:.8px;margin-bottom:7px}
 .person-card{background:var(--surface2);border:1px solid var(--border);
-  border-radius:7px;padding:9px 11px}
+  border-radius:7px;padding:9px 11px;display:flex;gap:10px;align-items:center}
+.person-avatar{width:38px;height:38px;border-radius:50%;object-fit:cover;
+  flex-shrink:0;border:1px solid var(--border);background:var(--surface)}
+.person-avatar-fallback{width:38px;height:38px;border-radius:50%;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;font-weight:700;
+  font-size:14px;background:var(--accent);color:#000}
+.person-text{flex:1;min-width:0}
 .person-name{font-size:12px;font-weight:600}
 .person-role{font-size:10px;color:var(--muted);margin-top:1px}
 .person-phone{font-size:11px;color:var(--accent);margin-top:5px;font-family:monospace}
@@ -214,8 +250,22 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);
 </head>
 <body>
 
+<!-- PASSWORD GATE -->
+<div id="auth-gate">
+  <div class="auth-box">
+    <div class="auth-logo">🔒</div>
+    <div class="auth-title">Bản đồ số</div>
+    <div class="auth-sub">Nhập mật khẩu để tiếp tục</div>
+    <input type="password" class="auth-input" id="auth-input"
+      placeholder="••••••••" autocomplete="off"
+      onkeydown="if(event.key==='Enter')checkAuth()">
+    <button class="auth-btn" onclick="checkAuth()">Vào bản đồ</button>
+    <div class="auth-error" id="auth-error"></div>
+  </div>
+</div>
+
 <!-- LOADING -->
-<div id="loading">
+<div id="loading" class="hidden">
   <div class="spinner"></div>
   <p>Đang tải dữ liệu từ Google Sheets…</p>
 </div>
@@ -228,7 +278,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);
   <div class="header-left">
     <div class="logo">🗺</div>
     <div class="title">
-      <h1>BẢN ĐỒ SỐ – HỆ THỐNG ĐIỂM BÁN HÀNG</h1>
+      <h1>BẢN ĐỒ SỐ</h1>
       <p id="subtitle">Đang kết nối…</p>
     </div>
   </div>
@@ -252,10 +302,28 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);
       <input class="search-input" id="search" placeholder="🔍  Tìm cơ sở, hệ thống, người phụ trách…" oninput="applyFilters()">
     </div>
     <div class="filter-row">
-      <button class="chip on-all" id="chip-all"      onclick="setFilter('all')">Tất cả</button>
-      <button class="chip"        id="chip-signed"   onclick="setFilter('signed')">✅ Đã ký</button>
-      <button class="chip"        id="chip-unsigned" onclick="setFilter('unsigned')">⚠ Chưa ký</button>
-      <button class="chip"        id="chip-expiring" onclick="setFilter('expiring')">🕐 Sắp hết hạn</button>
+      <select class="filter-select" id="f-system" onchange="applyFilters()">
+        <option value="">Tất cả hệ thống</option>
+      </select>
+      <select class="filter-select" id="f-contract" onchange="applyFilters()">
+        <option value="">Tất cả trạng thái HĐ</option>
+        <option value="Đã ký">Đã ký</option>
+        <option value="Chưa ký">Chưa ký</option>
+        <option value="Đang đàm phán">Đang đàm phán</option>
+        <option value="Hết hạn">Hết hạn</option>
+        <option value="Tạm ngừng">Tạm ngừng</option>
+        <option value="EXPIRING_SOON">🕐 Sắp hết hạn (≤30 ngày)</option>
+      </select>
+      <select class="filter-select" id="f-status" onchange="applyFilters()">
+        <option value="">Tất cả trạng thái</option>
+        <option value="Hoạt động">Hoạt động</option>
+        <option value="Tạm ngừng">Tạm ngừng</option>
+        <option value="Đóng cửa">Đóng cửa</option>
+        <option value="Đang đàm phán">Đang đàm phán</option>
+      </select>
+      <select class="filter-select" id="f-sales" onchange="applyFilters()">
+        <option value="">Tất cả CB phụ trách</option>
+      </select>
     </div>
     <div class="loc-list" id="loc-list"></div>
   </div>
@@ -291,19 +359,19 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);
       <div class="panel-addr" id="p-addr"></div>
       <div class="panel-body">
         <div>
-          <div class="section-title">Người phụ trách – cửa hàng</div>
+          <div class="section-title">Người đại diện</div>
           <div class="person-card" id="p-store-person"></div>
         </div>
         <div>
-          <div class="section-title">Sales phụ trách – nội bộ</div>
+          <div class="section-title">CB phụ trách</div>
           <div class="person-card" id="p-sales-person"></div>
         </div>
         <div>
-          <div class="section-title">Thông tin điểm</div>
+          <div class="section-title">Thông tin địa điểm</div>
           <div id="p-info"></div>
         </div>
         <div>
-          <div class="section-title">Pháp lý hợp đồng</div>
+          <div class="section-title">Thông tin pháp lý</div>
           <div id="p-legal"></div>
         </div>
         <div id="p-expiry-block"></div>
@@ -324,7 +392,9 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);
 // ============================================================
 // CẤU HÌNH — THAY GIÁ TRỊ NÀY SAU KHI DEPLOY APPS SCRIPT
 // ============================================================
-const API_URL = 'https://script.google.com/macros/s/AKfycbyuV1ZcFokZYKY0_SPjphzYNhMN7eR3eSyhQTESo79rCWJ2jNTEbZqzSEsaB75C2bU/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbxIqv21mAmuOtJR45S-RJ-6JcUvTgtZ9jPYYVem9THavZR9efyssSvyJV0oZyXtPfy8/exec';
+// Ví dụ:
+// const API_URL = 'https://script.google.com/macros/s/AKfycbxXXXXX.../exec';
 
 // Chế độ demo: dùng khi chưa có API thật
 const DEMO_MODE = API_URL.includes('THAY_BANG');
@@ -334,7 +404,6 @@ const DEMO_MODE = API_URL.includes('THAY_BANG');
 // ============================================================
 let allLocations = [];
 let filteredLocations = [];
-let activeFilter = 'all';
 let selectedId = null;
 let map, markersLayer;
 let currentLocation = null;
@@ -425,6 +494,7 @@ async function loadData() {
   }
 
   updateStats();
+  populateFilterOptions();
   applyFilters();
   document.getElementById('loading').classList.add('hidden');
 }
@@ -455,30 +525,50 @@ function updateStats() {
 // ============================================================
 // FILTER + RENDER
 // ============================================================
-function setFilter(f) {
-  activeFilter = f;
-  ['all','signed','unsigned','expiring'].forEach(k => {
-    const el = document.getElementById('chip-'+k);
-    el.className = 'chip' + (k===f ? ' on-'+k : '');
-  });
-  applyFilters();
+function populateFilterOptions() {
+  const systems = [...new Set(allLocations.map(l => l.sys_name_ref).filter(Boolean))].sort();
+  const salesOwners = [...new Set(allLocations.map(l => l.sales_owner).filter(Boolean))].sort();
+
+  const sysSel = document.getElementById('f-system');
+  const curSys = sysSel.value;
+  sysSel.innerHTML = '<option value="">Tất cả hệ thống</option>' +
+    systems.map(s => `<option value="${s}">${s}</option>`).join('');
+  if (systems.includes(curSys)) sysSel.value = curSys;
+
+  const salesSel = document.getElementById('f-sales');
+  const curSales = salesSel.value;
+  salesSel.innerHTML = '<option value="">Tất cả CB phụ trách</option>' +
+    salesOwners.map(s => `<option value="${s}">${s}</option>`).join('');
+  if (salesOwners.includes(curSales)) salesSel.value = curSales;
 }
 
 function applyFilters() {
-  const q = document.getElementById('search').value.toLowerCase();
-  const today = new Date();
+  const q         = document.getElementById('search').value.toLowerCase();
+  const fSystem   = document.getElementById('f-system').value;
+  const fContract = document.getElementById('f-contract').value;
+  const fStatus   = document.getElementById('f-status').value;
+  const fSales    = document.getElementById('f-sales').value;
+  const today     = new Date();
 
   filteredLocations = allLocations.filter(l => {
-    // Filter
     let ok = true;
-    if (activeFilter === 'signed')   ok = l.contract_status === 'Đã ký';
-    if (activeFilter === 'unsigned') ok = l.contract_status !== 'Đã ký';
-    if (activeFilter === 'expiring') {
-      if (!l.contract_expiry) return false;
-      const d = (new Date(l.contract_expiry) - today) / 86400000;
-      ok = d >= 0 && d <= 30;
+
+    if (fSystem) ok = ok && l.sys_name_ref === fSystem;
+    if (fStatus) ok = ok && l.status === fStatus;
+    if (fSales)  ok = ok && l.sales_owner === fSales;
+
+    if (fContract) {
+      if (fContract === 'EXPIRING_SOON') {
+        if (!l.contract_expiry) { ok = false; }
+        else {
+          const d = (new Date(l.contract_expiry) - today) / 86400000;
+          ok = ok && d >= 0 && d <= 30;
+        }
+      } else {
+        ok = ok && l.contract_status === fContract;
+      }
     }
-    // Search
+
     if (q) {
       const hay = [l.loc_name, l.sys_name_ref, l.sys_type, l.sales_owner,
                    l.store_manager, l.address].filter(Boolean).join(' ').toLowerCase();
@@ -566,6 +656,24 @@ function buildPopup(l) {
 }
 
 // ============================================================
+// AVATAR — ảnh đại diện với fallback chữ cái đầu tên
+// ============================================================
+function avatarFallbackHTML(name) {
+  const initial = (name || '?').trim().charAt(0).toUpperCase() || '?';
+  return `<div class="person-avatar-fallback">${initial}</div>`;
+}
+
+function personAvatarHTML(name, photoUrl) {
+  if (photoUrl) {
+    const safeName = (name || '').replace(/'/g, '');
+    const fallback = avatarFallbackHTML(safeName).replace(/"/g, '&quot;');
+    return `<img class="person-avatar" src="${photoUrl}" alt="${safeName}"
+      onerror="this.outerHTML='${fallback}'">`;
+  }
+  return avatarFallbackHTML(name);
+}
+
+// ============================================================
 // SELECT LOCATION
 // ============================================================
 function selectLoc(id) {
@@ -590,18 +698,22 @@ function selectLoc(id) {
   document.getElementById('p-name').textContent = l.loc_name || '–';
   document.getElementById('p-addr').textContent = '📍 ' + (l.address || 'Chưa có địa chỉ');
 
-  // Store manager
+  // Store manager — Người đại diện (ảnh + chức vụ)
   document.getElementById('p-store-person').innerHTML = `
-    <div class="person-name">${l.store_manager||'Chưa cập nhật'}</div>
-    <div class="person-role">Quản lý cơ sở</div>
-    ${l.store_phone?`<div class="person-phone">${l.store_phone}</div>`:''}
+    ${personAvatarHTML(l.store_manager, l.photo_url)}
+    <div class="person-text">
+      <div class="person-name">${l.store_manager||'Chưa cập nhật'}</div>
+      <div class="person-role">${l.job_title||'Quản lý cơ sở'}</div>
+      ${l.store_phone?`<div class="person-phone">${l.store_phone}</div>`:''}
+    </div>
   `;
 
-  // Sales owner
+  // Sales owner — CB phụ trách (bỏ dòng vai trò trùng lặp)
   document.getElementById('p-sales-person').innerHTML = `
-    <div class="person-name">${l.sales_owner||'Chưa phân công'}</div>
-    <div class="person-role">Sales phụ trách</div>
-    ${l.sales_phone?`<div class="person-phone">${l.sales_phone}</div>`:''}
+    <div class="person-text">
+      <div class="person-name">${l.sales_owner||'Chưa phân công'}</div>
+      ${l.sales_phone?`<div class="person-phone">${l.sales_phone}</div>`:''}
+    </div>
   `;
 
   // Info — bố cục: người phụ trách → thông tin điểm → pháp lý → ghi chú
@@ -623,7 +735,7 @@ function selectLoc(id) {
   const expiry = l.contract_expiry ? new Date(l.contract_expiry).toLocaleDateString('vi-VN') : '–';
   document.getElementById('p-legal').innerHTML = `
     <div class="info-row"><span class="info-key">Trạng thái</span><span class="info-val">${cs}</span></div>
-    <div class="info-row"><span class="info-key">Ngày ký</span><span class="info-val">${signed}</span></div>
+    <div class="info-row"><span class="info-key">Ngày cấp</span><span class="info-val">${signed}</span></div>
     <div class="info-row"><span class="info-key">Hết hạn</span><span class="info-val">${expiry}</span></div>
   `;
 
@@ -740,12 +852,12 @@ function callStore() {
 
 function exportCSV() {
   const cols = ['loc_id','sys_name_ref','sys_type','loc_name','address',
-                'store_manager','store_phone','sales_owner','sales_phone',
+                'store_manager','job_title','store_phone','sales_owner','sales_phone',
                 'contract_status','contract_signed','contract_expiry',
                 'status','notes'];
   const hdr  = ['ID','Hệ thống','Loại HT','Tên cơ sở','Địa chỉ',
-                 'Quản lý CH','SĐT quản lý','Sales PT','SĐT sales',
-                 'TT hợp đồng','Ngày ký','Ngày hết hạn',
+                 'Quản lý CH','Chức vụ','SĐT quản lý','Sales PT','SĐT sales',
+                 'TT hợp đồng','Ngày cấp','Ngày hết hạn',
                  'Trạng thái','Ghi chú'];
   const rows = allLocations.map(l => cols.map(c => `"${(l[c]||'').toString().replace(/"/g,'""')}"`));
   const csv  = [hdr.map(h=>`"${h}"`), ...rows].map(r=>r.join(',')).join('\n');
@@ -772,7 +884,7 @@ function getDemoData() {
      sys_type:'Chuỗi cửa hàng',sys_scope:'TP.HCM / Toàn quốc',
      loc_name:'BHX – Lê Văn Việt',
      address:'123 Lê Văn Việt, P.Hiệp Phú, TP.Thủ Đức',lat:10.8231,lng:106.7689,
-     store_manager:'Trần Văn Hùng',store_phone:'0901 200 001',
+     store_manager:'Trần Văn Hùng',job_title:'Quản lý cửa hàng',photo_url:null,store_phone:'0901 200 001',
      sales_owner:'Nguyễn Sales A',sales_phone:'0911 300 001',
      contract_status:'Đã ký',contract_signed:'2024-06-01',contract_expiry:'2025-08-01',
      status:'Hoạt động',notes:'Ưu tiên kệ vị trí A1'},
@@ -780,7 +892,7 @@ function getDemoData() {
      sys_type:'Chuỗi cửa hàng',sys_scope:'TP.HCM / Toàn quốc',
      loc_name:'BHX – Nguyễn Oanh',
      address:'45 Nguyễn Oanh, P.17, Gò Vấp',lat:10.8355,lng:106.6836,
-     store_manager:'Lê Thị Mai',store_phone:'0901 200 002',
+     store_manager:'Lê Thị Mai',job_title:'Quản lý cửa hàng',photo_url:null,store_phone:'0901 200 002',
      sales_owner:'Nguyễn Sales A',sales_phone:'0911 300 001',
      contract_status:'Đã ký',contract_signed:'2024-09-15',contract_expiry:'2025-09-15',
      status:'Hoạt động',notes:'Kho nhỏ, giao sáng sớm trước 7h'},
@@ -788,7 +900,7 @@ function getDemoData() {
      sys_type:'Siêu thị mini',sys_scope:'Toàn quốc',
      loc_name:'WinMart+ – Phan Xích Long',
      address:'88 Phan Xích Long, P.2, Phú Nhuận',lat:10.7990,lng:106.6842,
-     store_manager:'Phạm Đức Thành',store_phone:'0901 200 003',
+     store_manager:'Phạm Đức Thành',job_title:'Chủ cửa hàng',photo_url:null,store_phone:'0901 200 003',
      sales_owner:'Trần Sales B',sales_phone:'0911 300 002',
      contract_status:'Chưa ký',contract_signed:null,contract_expiry:null,
      status:'Đang đàm phán',notes:'Đang chờ duyệt từ cấp vùng WinMart'},
@@ -796,7 +908,7 @@ function getDemoData() {
      sys_type:'Cửa hàng tiện lợi',sys_scope:'TP.HCM',
      loc_name:'GS25 – Võ Văn Tần',
      address:'22 Võ Văn Tần, P.6, Q.3',lat:10.7769,lng:106.6939,
-     store_manager:'Kim Soo Jin',store_phone:'0901 200 004',
+     store_manager:'Kim Soo Jin',job_title:'Trưởng chi nhánh',photo_url:null,store_phone:'0901 200 004',
      sales_owner:'Võ Sales C',sales_phone:'0911 300 003',
      contract_status:'Đã ký',contract_signed:'2025-01-10',contract_expiry:'2026-01-10',
      status:'Hoạt động',notes:'Giao qua cửa hậu, liên hệ trước 1 ngày'},
@@ -804,7 +916,7 @@ function getDemoData() {
      sys_type:'Siêu thị mini',sys_scope:'Toàn quốc',
      loc_name:'WinMart+ – Lũy Bán Bích',
      address:'156 Lũy Bán Bích, P.Hòa Thạnh, Tân Phú',lat:10.7874,lng:106.6254,
-     store_manager:'Ngô Thị Hoa',store_phone:'0901 200 005',
+     store_manager:'Ngô Thị Hoa',job_title:'Quản lý cửa hàng',photo_url:null,store_phone:'0901 200 005',
      sales_owner:'Trần Sales B',sales_phone:'0911 300 002',
      contract_status:'Đã ký',contract_signed:'2025-03-01',contract_expiry:'2025-08-10',
      status:'Hoạt động',notes:''},
@@ -812,7 +924,7 @@ function getDemoData() {
      sys_type:'Chuỗi cửa hàng',sys_scope:'TP.HCM / Toàn quốc',
      loc_name:'BHX – Đinh Tiên Hoàng',
      address:'105 Đinh Tiên Hoàng, P.3, Bình Thạnh',lat:10.8020,lng:106.7100,
-     store_manager:'Hoàng Văn Tú',store_phone:'0901 200 006',
+     store_manager:'Hoàng Văn Tú',job_title:'Quản lý cửa hàng',photo_url:null,store_phone:'0901 200 006',
      sales_owner:'Nguyễn Sales A',sales_phone:'0911 300 001',
      contract_status:'Hết hạn',contract_signed:'2023-07-01',contract_expiry:'2024-07-01',
      status:'Tạm ngừng',notes:'HĐ hết hạn, chưa gia hạn. Cần xử lý gấp.'},
@@ -820,10 +932,66 @@ function getDemoData() {
 }
 
 // ============================================================
-// BOOT
+// PASSWORD GATE — xác thực bằng SHA-256 hash (không lưu mật khẩu
+// dạng thuần trong mã nguồn). Xem hướng dẫn đổi mật khẩu ở cuối file.
 // ============================================================
-initMap();
-loadData();
+
+// Hash SHA-256 của mật khẩu hiện tại. Mật khẩu mặc định: bando2026
+// ĐỔI NGAY trước khi chia sẻ cho người khác — xem hướng dẫn cuối file.
+const AUTH_HASH = 'fb0e469ecd208b09f3ed1db19754cd77c3a74590ce4158256fbb82f8b73a2910';
+
+async function sha256Hex(text) {
+  const buf  = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function checkAuth() {
+  const input = document.getElementById('auth-input');
+  const errEl = document.getElementById('auth-error');
+  const val   = input.value;
+
+  if (!val) { errEl.textContent = 'Vui lòng nhập mật khẩu'; return; }
+
+  const hash = await sha256Hex(val);
+  if (hash === AUTH_HASH) {
+    sessionStorage.setItem('mapAuthOK', '1');
+    document.getElementById('auth-gate').classList.add('hidden');
+    startApp();
+  } else {
+    errEl.textContent = 'Sai mật khẩu, vui lòng thử lại';
+    input.value = '';
+    input.focus();
+  }
+}
+
+function startApp() {
+  initMap();
+  loadData();
+}
+
+// Nếu trình duyệt đã xác thực trong phiên này → bỏ qua màn hình nhập
+if (sessionStorage.getItem('mapAuthOK') === '1') {
+  document.getElementById('auth-gate').classList.add('hidden');
+  startApp();
+}
+
+/* ============================================================
+   HƯỚNG DẪN ĐỔI MẬT KHẨU (không cần hỏi Claude, tự làm được):
+
+   1. Mở Console trình duyệt (F12 → tab Console) trên trang bất kỳ
+   2. Dán và chạy đoạn sau, thay 'MẬT_KHẨU_MỚI' bằng mật khẩu anh muốn:
+
+      crypto.subtle.digest('SHA-256', new TextEncoder().encode('MẬT_KHẨU_MỚI'))
+        .then(b => console.log(Array.from(new Uint8Array(b))
+          .map(x => x.toString(16).padStart(2,'0')).join('')));
+
+   3. Copy chuỗi hash hiện ra (dài 64 ký tự)
+   4. Mở index.html bằng Notepad/VS Code, tìm dòng "const AUTH_HASH ="
+   5. Thay giá trị cũ bằng chuỗi hash vừa copy → Lưu → Upload lại GitHub Pages
+
+   Lưu ý: đây là lớp bảo vệ nhẹ (ngăn người lạ tình cờ có link),
+   không phải bảo mật cấp cao. Không dùng cho dữ liệu thực sự nhạy cảm.
+============================================================ */
 </script>
 </body>
 </html>
