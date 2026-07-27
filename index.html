@@ -8,6 +8,9 @@
 
 <!-- Leaflet CSS -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<!-- Leaflet MarkerCluster CSS -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css"/>
 
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -83,7 +86,28 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);
 
 /* ── SIDEBAR ── */
 .sidebar{width:290px;background:var(--surface);border-right:1px solid var(--border);
-  display:flex;flex-direction:column;flex-shrink:0}
+  display:flex;flex-direction:column;flex-shrink:0;transition:width .22s ease;overflow:hidden}
+.sidebar.collapsed{width:52px}
+
+.sidebar-content{display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0}
+.sidebar.collapsed .sidebar-content{display:none}
+
+.sidebar-collapse-row{padding:8px 10px;border-bottom:1px solid var(--border);
+  display:flex;justify-content:flex-end;flex-shrink:0}
+.sidebar-collapse-btn{background:transparent;border:1px solid var(--border);border-radius:6px;
+  color:var(--muted);font-size:11px;padding:4px 8px;cursor:pointer;font-family:var(--font);
+  transition:all .15s}
+.sidebar-collapse-btn:hover{color:var(--accent);border-color:var(--accent)}
+
+.sidebar-rail{display:none;flex-direction:column;align-items:center;gap:14px;
+  padding:14px 0;width:52px;flex:1}
+.sidebar.collapsed .sidebar-rail{display:flex}
+.rail-btn{width:34px;height:34px;border-radius:8px;background:var(--surface2);
+  border:1px solid var(--border);color:var(--text);font-size:14px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;transition:border-color .15s;
+  flex-shrink:0}
+.rail-btn:hover{border-color:var(--accent);color:var(--accent)}
+.rail-count{font-size:11px;font-weight:700;color:var(--accent);font-family:monospace}
 
 .search-filter-toggle{display:flex;align-items:center;justify-content:space-between;
   padding:10px 12px;cursor:pointer;font-size:12px;font-weight:600;color:var(--text);
@@ -247,7 +271,31 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);
 }
 .coords-toast.show{display:block}
 
+/* ── MOBILE: panel chi tiết chuyển thành bottom sheet ── */
+@media (max-width: 768px) {
+  .panel{
+    position:fixed;left:0;right:0;top:auto;bottom:0;
+    width:100%;max-width:100%;border-radius:16px 16px 0 0;
+    max-height:72vh;transform:translateY(100%);
+  }
+  .panel.open{transform:translateY(0)}
+  .panel-hdr{padding:10px 14px 6px;position:relative}
+  /* Thanh kéo nhỏ ở đỉnh sheet — gợi ý có thể vuốt/đóng */
+  .panel-hdr::before{
+    content:'';position:absolute;top:6px;left:50%;transform:translateX(-50%);
+    width:36px;height:4px;border-radius:2px;background:var(--border);
+  }
+}
+
 /* legend */
+/* cluster icons — nhóm marker khi zoom xa */
+.cluster-icon{display:flex;align-items:center;justify-content:center;
+  border-radius:50%;font-weight:700;font-family:var(--font);
+  box-shadow:0 2px 10px rgba(0,0,0,.5);border:2px solid rgba(255,255,255,.15)}
+.cluster-icon.cluster-sm{width:34px;height:34px;font-size:12px;background:var(--accent);color:#000}
+.cluster-icon.cluster-md{width:42px;height:42px;font-size:13px;background:var(--gold);color:#000}
+.cluster-icon.cluster-lg{width:50px;height:50px;font-size:14px;background:var(--accent2);color:#fff}
+
 .legend{position:absolute;bottom:12px;left:12px;background:var(--surface);
   border:1px solid var(--border);border-radius:7px;padding:9px 12px;
   display:flex;flex-direction:column;gap:5px;z-index:500;pointer-events:none}
@@ -305,31 +353,43 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);
 <!-- LAYOUT -->
 <div class="layout">
   <!-- SIDEBAR -->
-  <div class="sidebar">
-    <div class="search-filter-toggle" onclick="toggleSearchFilter()">
-      <span>🔍 Tìm kiếm &amp; Lọc</span>
-      <span id="sf-chevron">▾</span>
-    </div>
-    <div class="search-filter-panel" id="search-filter-panel">
-      <div class="search-wrap">
-        <input class="search-input" id="search" placeholder="🔍  Tìm cơ sở, hệ thống, người phụ trách…" oninput="applyFilters()">
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-content" id="sidebar-content">
+      <div class="sidebar-collapse-row">
+        <button class="sidebar-collapse-btn" onclick="toggleSidebar()" title="Thu gọn sidebar">◀ Thu gọn</button>
       </div>
-      <div class="filter-row">
-        <select class="filter-select" id="f-system" onchange="applyFilters()">
-          <option value="">Tất cả hệ thống</option>
-        </select>
-        <select class="filter-select" id="f-contract" onchange="applyFilters()">
-          <option value="">Tất cả trạng thái HĐ</option>
-        </select>
-        <select class="filter-select" id="f-status" onchange="applyFilters()">
-          <option value="">Tất cả trạng thái</option>
-        </select>
-        <select class="filter-select" id="f-sales" onchange="applyFilters()">
-          <option value="">Tất cả CB phụ trách</option>
-        </select>
+      <div class="search-filter-toggle" onclick="toggleSearchFilter()">
+        <span>🔍 Tìm kiếm &amp; Lọc</span>
+        <span id="sf-chevron">▾</span>
       </div>
+      <div class="search-filter-panel" id="search-filter-panel">
+        <div class="search-wrap">
+          <input class="search-input" id="search" placeholder="🔍  Tìm cơ sở, hệ thống, người phụ trách…" oninput="applyFilters()">
+        </div>
+        <div class="filter-row">
+          <select class="filter-select" id="f-system" onchange="applyFilters()">
+            <option value="">Tất cả hệ thống</option>
+          </select>
+          <select class="filter-select" id="f-contract" onchange="applyFilters()">
+            <option value="">Tất cả trạng thái HĐ</option>
+          </select>
+          <select class="filter-select" id="f-status" onchange="applyFilters()">
+            <option value="">Tất cả trạng thái</option>
+          </select>
+          <select class="filter-select" id="f-sales" onchange="applyFilters()">
+            <option value="">Tất cả CB phụ trách</option>
+          </select>
+        </div>
+      </div>
+      <div class="loc-list" id="loc-list"></div>
     </div>
-    <div class="loc-list" id="loc-list"></div>
+
+    <!-- Rail thu gọn — hiện khi sidebar đóng -->
+    <div class="sidebar-rail" id="sidebar-rail">
+      <button class="rail-btn" onclick="toggleSidebar()" title="Mở rộng sidebar">▶</button>
+      <div class="rail-count" id="rail-count">0</div>
+      <button class="rail-btn" onclick="expandSidebarSearch()" title="Tìm kiếm">🔍</button>
+    </div>
   </div>
 
   <!-- MAP -->
@@ -390,6 +450,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);
 
 <!-- Leaflet JS -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"></script>
 
 <script>
 // ============================================================
@@ -461,13 +522,33 @@ function initMap() {
     maxZoom: 19
   }).addTo(map);
 
-  markersLayer = L.layerGroup().addTo(map);
+  markersLayer = L.markerClusterGroup({
+    maxClusterRadius: 55,
+    spiderfyOnMaxZoom: true,
+    iconCreateFunction: function(cluster) {
+      const count = cluster.getChildCount();
+      let cls = 'cluster-sm';
+      if (count >= 50)      cls = 'cluster-lg';
+      else if (count >= 10) cls = 'cluster-md';
+      return L.divIcon({
+        html: `<div class="cluster-icon ${cls}">${count}</div>`,
+        className: '',
+        iconSize: L.point(40, 40)
+      });
+    }
+  }).addTo(map);
 
-  // Click handler: chế độ sửa tọa độ
+  // Click handler: chế độ sửa tọa độ + chạm ra ngoài để đóng bottom sheet (mobile)
   map.on('click', function(e) {
-    if (!editCoordsMode || !currentLocation) return;
-    const { lat, lng } = e.latlng;
-    saveCoords(currentLocation.loc_id, lat, lng);
+    if (editCoordsMode && currentLocation) {
+      const { lat, lng } = e.latlng;
+      saveCoords(currentLocation.loc_id, lat, lng);
+      return;
+    }
+    // Trên mobile, chạm vào bản đồ (ngoài panel) sẽ đóng bottom sheet đang mở
+    if (window.innerWidth <= 768 && selectedId) {
+      closePanel();
+    }
   });
 }
 
@@ -523,6 +604,38 @@ function updateStats() {
   document.getElementById('s-active').textContent  = allLocations.filter(l=>l.status==='Hoạt động').length;
   document.getElementById('s-signed').textContent  = allLocations.filter(l=>l.contract_status==='Đã ký').length;
   document.getElementById('s-expiring').textContent = expiring;
+  document.getElementById('rail-count').textContent = allLocations.length;
+}
+
+// ============================================================
+// THU GỌN / MỞ RỘNG SIDEBAR (icon rail, kiểu Gmail/Slack)
+// ============================================================
+let sidebarCollapsed = false;
+
+function toggleSidebar() {
+  sidebarCollapsed = !sidebarCollapsed;
+  document.getElementById('sidebar').classList.toggle('collapsed', sidebarCollapsed);
+  // Leaflet cần được báo kích thước container đã đổi sau khi CSS transition xong
+  setTimeout(() => { if (map) map.invalidateSize(); }, 230);
+}
+
+function expandSidebarSearch() {
+  sidebarCollapsed = false;
+  document.getElementById('sidebar').classList.remove('collapsed');
+  searchFilterOpen = true;
+  document.getElementById('search-filter-panel').classList.add('open');
+  document.getElementById('sf-chevron').textContent = '▴';
+  setTimeout(() => {
+    if (map) map.invalidateSize();
+    document.getElementById('search').focus();
+  }, 230);
+}
+
+// Mặc định thu gọn sidebar trên màn hình nhỏ (điện thoại) để nhường
+// tối đa không gian cho bản đồ — mở rộng lại bất cứ lúc nào qua rail
+if (window.innerWidth <= 768) {
+  sidebarCollapsed = true;
+  document.getElementById('sidebar').classList.add('collapsed');
 }
 
 // ============================================================
@@ -652,8 +765,11 @@ function sysIcon(sysName) {
 // ============================================================
 // RENDER MARKERS
 // ============================================================
+let markersById = {};
+
 function renderMarkers() {
   markersLayer.clearLayers();
+  markersById = {};
 
   filteredLocations.forEach(l => {
     if (!l.lat || !l.lng || l.lat === 'GEOCODE_FAIL') return;
@@ -666,6 +782,7 @@ function renderMarkers() {
     marker.bindPopup(buildPopup(l), { maxWidth: 260, className: '' });
     marker.on('click', () => selectLoc(l.loc_id));
     markersLayer.addLayer(marker);
+    markersById[l.loc_id] = marker;
   });
 }
 
@@ -738,9 +855,15 @@ function selectLoc(id) {
   renderList();
   renderMarkers();
 
-  // Pan map to marker
+  // Zoom/pan đến marker — nếu marker đang bị ẩn trong 1 cụm (cluster),
+  // zoomToShowLayer sẽ tự zoom vào đủ để tách cụm và hiện marker này ra
   if (l.lat && l.lng && l.lat !== 'GEOCODE_FAIL') {
-    map.panTo([parseFloat(l.lat), parseFloat(l.lng)], {animate:true});
+    const marker = markersById[l.loc_id];
+    if (marker) {
+      markersLayer.zoomToShowLayer(marker, () => {});
+    } else {
+      map.panTo([parseFloat(l.lat), parseFloat(l.lng)], {animate:true});
+    }
   }
 
   // Fill panel — bỏ hiển thị tên/loại hệ thống ở header (đã có ở Thông tin địa điểm)
