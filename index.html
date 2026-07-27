@@ -85,6 +85,14 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);
 .sidebar{width:290px;background:var(--surface);border-right:1px solid var(--border);
   display:flex;flex-direction:column;flex-shrink:0}
 
+.search-filter-toggle{display:flex;align-items:center;justify-content:space-between;
+  padding:10px 12px;cursor:pointer;font-size:12px;font-weight:600;color:var(--text);
+  border-bottom:1px solid var(--border);background:var(--surface);
+  user-select:none;transition:background .15s}
+.search-filter-toggle:hover{background:var(--surface2)}
+.search-filter-toggle span:last-child{color:var(--muted);font-size:10px;transition:transform .2s}
+.search-filter-panel{max-height:0;overflow:hidden;transition:max-height .25s ease}
+.search-filter-panel.open{max-height:240px}
 .search-wrap{padding:10px;border-bottom:1px solid var(--border)}
 .search-input{width:100%;padding:7px 11px;background:var(--bg);border:1px solid var(--border);
   border-radius:7px;color:var(--text);font-size:12px;font-family:var(--font);outline:none;transition:border-color .15s}
@@ -298,32 +306,28 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);
 <div class="layout">
   <!-- SIDEBAR -->
   <div class="sidebar">
-    <div class="search-wrap">
-      <input class="search-input" id="search" placeholder="🔍  Tìm cơ sở, hệ thống, người phụ trách…" oninput="applyFilters()">
+    <div class="search-filter-toggle" onclick="toggleSearchFilter()">
+      <span>🔍 Tìm kiếm &amp; Lọc</span>
+      <span id="sf-chevron">▾</span>
     </div>
-    <div class="filter-row">
-      <select class="filter-select" id="f-system" onchange="applyFilters()">
-        <option value="">Tất cả hệ thống</option>
-      </select>
-      <select class="filter-select" id="f-contract" onchange="applyFilters()">
-        <option value="">Tất cả trạng thái HĐ</option>
-        <option value="Đã ký">Đã ký</option>
-        <option value="Chưa ký">Chưa ký</option>
-        <option value="Đang đàm phán">Đang đàm phán</option>
-        <option value="Hết hạn">Hết hạn</option>
-        <option value="Tạm ngừng">Tạm ngừng</option>
-        <option value="EXPIRING_SOON">🕐 Sắp hết hạn (≤30 ngày)</option>
-      </select>
-      <select class="filter-select" id="f-status" onchange="applyFilters()">
-        <option value="">Tất cả trạng thái</option>
-        <option value="Hoạt động">Hoạt động</option>
-        <option value="Tạm ngừng">Tạm ngừng</option>
-        <option value="Đóng cửa">Đóng cửa</option>
-        <option value="Đang đàm phán">Đang đàm phán</option>
-      </select>
-      <select class="filter-select" id="f-sales" onchange="applyFilters()">
-        <option value="">Tất cả CB phụ trách</option>
-      </select>
+    <div class="search-filter-panel" id="search-filter-panel">
+      <div class="search-wrap">
+        <input class="search-input" id="search" placeholder="🔍  Tìm cơ sở, hệ thống, người phụ trách…" oninput="applyFilters()">
+      </div>
+      <div class="filter-row">
+        <select class="filter-select" id="f-system" onchange="applyFilters()">
+          <option value="">Tất cả hệ thống</option>
+        </select>
+        <select class="filter-select" id="f-contract" onchange="applyFilters()">
+          <option value="">Tất cả trạng thái HĐ</option>
+        </select>
+        <select class="filter-select" id="f-status" onchange="applyFilters()">
+          <option value="">Tất cả trạng thái</option>
+        </select>
+        <select class="filter-select" id="f-sales" onchange="applyFilters()">
+          <option value="">Tất cả CB phụ trách</option>
+        </select>
+      </div>
     </div>
     <div class="loc-list" id="loc-list"></div>
   </div>
@@ -351,8 +355,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);
 
     <!-- DETAIL PANEL -->
     <div class="panel" id="panel">
-      <div class="panel-hdr">
-        <div class="badge" id="p-badge"></div>
+      <div class="panel-hdr" style="justify-content:flex-end">
         <button class="panel-close" onclick="closePanel()">✕</button>
       </div>
       <div class="panel-name" id="p-name"></div>
@@ -392,7 +395,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);
 // ============================================================
 // CẤU HÌNH — THAY GIÁ TRỊ NÀY SAU KHI DEPLOY APPS SCRIPT
 // ============================================================
-const API_URL = 'https://script.google.com/macros/s/AKfycbxIqv21mAmuOtJR45S-RJ-6JcUvTgtZ9jPYYVem9THavZR9efyssSvyJV0oZyXtPfy8/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbxMOdpyqtc_i5s-UGTdiWV4T4WjUIEb8A5YvE3f91xHiMxJSRdw5ZNpHMeGhs1XEA-ZDg/exec';
 // Ví dụ:
 // const API_URL = 'https://script.google.com/macros/s/AKfycbxXXXXX.../exec';
 
@@ -523,11 +526,23 @@ function updateStats() {
 }
 
 // ============================================================
+// TOGGLE THU GỌN/MỞ RỘNG KHỐI TÌM KIẾM & LỌC
+// ============================================================
+let searchFilterOpen = false;
+function toggleSearchFilter() {
+  searchFilterOpen = !searchFilterOpen;
+  document.getElementById('search-filter-panel').classList.toggle('open', searchFilterOpen);
+  document.getElementById('sf-chevron').textContent = searchFilterOpen ? '▴' : '▾';
+}
+
+// ============================================================
 // FILTER + RENDER
 // ============================================================
 function populateFilterOptions() {
-  const systems = [...new Set(allLocations.map(l => l.sys_name_ref).filter(Boolean))].sort();
+  const systems  = [...new Set(allLocations.map(l => l.sys_name_ref).filter(Boolean))].sort();
   const salesOwners = [...new Set(allLocations.map(l => l.sales_owner).filter(Boolean))].sort();
+  const contractStatuses = [...new Set(allLocations.map(l => l.contract_status).filter(Boolean))].sort();
+  const opStatuses = [...new Set(allLocations.map(l => l.status).filter(Boolean))].sort();
 
   const sysSel = document.getElementById('f-system');
   const curSys = sysSel.value;
@@ -540,6 +555,21 @@ function populateFilterOptions() {
   salesSel.innerHTML = '<option value="">Tất cả CB phụ trách</option>' +
     salesOwners.map(s => `<option value="${s}">${s}</option>`).join('');
   if (salesOwners.includes(curSales)) salesSel.value = curSales;
+
+  const contractSel = document.getElementById('f-contract');
+  const curContract = contractSel.value;
+  contractSel.innerHTML = '<option value="">Tất cả trạng thái HĐ</option>' +
+    contractStatuses.map(s => `<option value="${s}">${s}</option>`).join('') +
+    '<option value="EXPIRING_SOON">🕐 Sắp hết hạn (≤30 ngày)</option>';
+  if (curContract && (contractStatuses.includes(curContract) || curContract === 'EXPIRING_SOON')) {
+    contractSel.value = curContract;
+  }
+
+  const statusSel = document.getElementById('f-status');
+  const curStatus = statusSel.value;
+  statusSel.innerHTML = '<option value="">Tất cả trạng thái</option>' +
+    opStatuses.map(s => `<option value="${s}">${s}</option>`).join('');
+  if (opStatuses.includes(curStatus)) statusSel.value = curStatus;
 }
 
 function applyFilters() {
@@ -663,11 +693,33 @@ function avatarFallbackHTML(name) {
   return `<div class="person-avatar-fallback">${initial}</div>`;
 }
 
+// Chuyển link Google Drive share (dạng xem trước) thành link ảnh trực tiếp.
+// Link share thông thường: https://drive.google.com/file/d/FILE_ID/view?usp=sharing
+// → không dùng trực tiếp được trong thẻ <img>, cần chuyển sang link tải trực tiếp.
+// LƯU Ý: file trên Drive phải được chia sẻ ở chế độ
+// "Anyone with the link" (Bất kỳ ai có đường liên kết) mới hiển thị được.
+function normalizeDriveUrl(url) {
+  if (!url) return url;
+  const trimmed = url.trim();
+
+  // Dạng: /file/d/FILE_ID/view  hoặc /file/d/FILE_ID/edit
+  let m = trimmed.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (m) return `https://drive.google.com/thumbnail?id=${m[1]}&sz=w400`;
+
+  // Dạng: open?id=FILE_ID  hoặc  uc?id=FILE_ID
+  m = trimmed.match(/drive\.google\.com\/(?:open|uc)\?.*[?&]id=([a-zA-Z0-9_-]+)/);
+  if (m) return `https://drive.google.com/thumbnail?id=${m[1]}&sz=w400`;
+
+  // Không phải link Drive dạng nhận diện được → dùng nguyên link (URL ảnh public khác)
+  return trimmed;
+}
+
 function personAvatarHTML(name, photoUrl) {
   if (photoUrl) {
-    const safeName = (name || '').replace(/'/g, '');
-    const fallback = avatarFallbackHTML(safeName).replace(/"/g, '&quot;');
-    return `<img class="person-avatar" src="${photoUrl}" alt="${safeName}"
+    const directUrl = normalizeDriveUrl(photoUrl);
+    const safeName  = (name || '').replace(/'/g, '');
+    const fallback  = avatarFallbackHTML(safeName).replace(/"/g, '&quot;');
+    return `<img class="person-avatar" src="${directUrl}" alt="${safeName}"
       onerror="this.outerHTML='${fallback}'">`;
   }
   return avatarFallbackHTML(name);
@@ -691,10 +743,7 @@ function selectLoc(id) {
     map.panTo([parseFloat(l.lat), parseFloat(l.lng)], {animate:true});
   }
 
-  // Fill panel — tiêu đề: Tên hệ thống + Loại hệ thống
-  const sysLabel = [l.sys_name_ref, l.sys_type].filter(Boolean).join(' · ');
-  document.getElementById('p-badge').className = 'badge signed';
-  document.getElementById('p-badge').textContent = sysLabel || '–';
+  // Fill panel — bỏ hiển thị tên/loại hệ thống ở header (đã có ở Thông tin địa điểm)
   document.getElementById('p-name').textContent = l.loc_name || '–';
   document.getElementById('p-addr').textContent = '📍 ' + (l.address || 'Chưa có địa chỉ');
 
@@ -932,18 +981,12 @@ function getDemoData() {
 }
 
 // ============================================================
-// PASSWORD GATE — xác thực bằng SHA-256 hash (không lưu mật khẩu
-// dạng thuần trong mã nguồn). Xem hướng dẫn đổi mật khẩu ở cuối file.
+// PASSWORD GATE — xác thực PHÍA SERVER qua Apps Script.
+// Mật khẩu KHÔNG còn lưu trong mã nguồn index.html (kể cả dạng
+// hash) — chỉ tồn tại trong Script Properties của Apps Script,
+// nơi không ai xem được dù mở "View Page Source".
+// Đổi mật khẩu: xem hàm setMapPassword() trong Code.gs.
 // ============================================================
-
-// Hash SHA-256 của mật khẩu hiện tại. Mật khẩu mặc định: bando2026
-// ĐỔI NGAY trước khi chia sẻ cho người khác — xem hướng dẫn cuối file.
-const AUTH_HASH = 'fb0e469ecd208b09f3ed1db19754cd77c3a74590ce4158256fbb82f8b73a2910';
-
-async function sha256Hex(text) {
-  const buf  = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
 
 async function checkAuth() {
   const input = document.getElementById('auth-input');
@@ -951,16 +994,35 @@ async function checkAuth() {
   const val   = input.value;
 
   if (!val) { errEl.textContent = 'Vui lòng nhập mật khẩu'; return; }
+  errEl.textContent = 'Đang kiểm tra…';
 
-  const hash = await sha256Hex(val);
-  if (hash === AUTH_HASH) {
-    sessionStorage.setItem('mapAuthOK', '1');
-    document.getElementById('auth-gate').classList.add('hidden');
-    startApp();
-  } else {
-    errEl.textContent = 'Sai mật khẩu, vui lòng thử lại';
-    input.value = '';
-    input.focus();
+  // Chế độ DEMO (chưa cấu hình API_URL thật) → cho phép xem thử
+  // bằng mật khẩu cố định 'demo', không gọi server.
+  if (DEMO_MODE) {
+    if (val === 'demo') {
+      sessionStorage.setItem('mapAuthOK', '1');
+      document.getElementById('auth-gate').classList.add('hidden');
+      startApp();
+    } else {
+      errEl.textContent = 'Chế độ demo — dùng mật khẩu: demo';
+      input.value = ''; input.focus();
+    }
+    return;
+  }
+
+  try {
+    const res  = await fetch(API_URL + '?action=checkAuth&key=' + encodeURIComponent(val));
+    const json = await res.json();
+    if (json.status === 'ok') {
+      sessionStorage.setItem('mapAuthOK', '1');
+      document.getElementById('auth-gate').classList.add('hidden');
+      startApp();
+    } else {
+      errEl.textContent = 'Sai mật khẩu, vui lòng thử lại';
+      input.value = ''; input.focus();
+    }
+  } catch (err) {
+    errEl.textContent = 'Lỗi kết nối — thử lại sau';
   }
 }
 
@@ -976,21 +1038,18 @@ if (sessionStorage.getItem('mapAuthOK') === '1') {
 }
 
 /* ============================================================
-   HƯỚNG DẪN ĐỔI MẬT KHẨU (không cần hỏi Claude, tự làm được):
+   ĐỔI MẬT KHẨU — thực hiện trong Apps Script, KHÔNG cần sửa
+   hay upload lại index.html:
 
-   1. Mở Console trình duyệt (F12 → tab Console) trên trang bất kỳ
-   2. Dán và chạy đoạn sau, thay 'MẬT_KHẨU_MỚI' bằng mật khẩu anh muốn:
+   1. Mở Google Sheets → Extensions → Apps Script
+   2. Trong Code.gs, tìm hàm setMapPassword()
+   3. Sửa dòng NEW_PASSWORD thành mật khẩu mới
+   4. Chọn hàm setMapPassword trong dropdown → nhấn Run
+   5. Xong — mật khẩu có hiệu lực ngay lập tức
 
-      crypto.subtle.digest('SHA-256', new TextEncoder().encode('MẬT_KHẨU_MỚI'))
-        .then(b => console.log(Array.from(new Uint8Array(b))
-          .map(x => x.toString(16).padStart(2,'0')).join('')));
-
-   3. Copy chuỗi hash hiện ra (dài 64 ký tự)
-   4. Mở index.html bằng Notepad/VS Code, tìm dòng "const AUTH_HASH ="
-   5. Thay giá trị cũ bằng chuỗi hash vừa copy → Lưu → Upload lại GitHub Pages
-
-   Lưu ý: đây là lớp bảo vệ nhẹ (ngăn người lạ tình cờ có link),
-   không phải bảo mật cấp cao. Không dùng cho dữ liệu thực sự nhạy cảm.
+   Lưu ý: đây vẫn là mật khẩu dùng chung (không phải tài khoản
+   riêng từng người), phù hợp chia sẻ nội bộ + đối tác tin cậy —
+   không dùng cho dữ liệu cần bảo mật cấp cao.
 ============================================================ */
 </script>
 </body>
